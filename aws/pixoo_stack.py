@@ -13,7 +13,8 @@ class PixooStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         pixoo_lambda = PythonFunction(
-            self, "PixooHandler",
+            self,
+            "PixooHandler",
             runtime=_lambda.Runtime.PYTHON_3_11,
             entry="../local",
             index="index.py",
@@ -21,11 +22,12 @@ class PixooStack(Stack):
             timeout=Duration.seconds(10),
             environment={
                 "PIXOO_URL": os.environ["PIXOO_URL"],
-            }
+            },
         )
 
         rule = events.Rule(
-            self, "EveryMinuteRule",
+            self,
+            "EveryMinuteRule",
             schedule=events.Schedule.rate(Duration.minutes(1)),
         )
 

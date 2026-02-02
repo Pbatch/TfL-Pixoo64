@@ -9,6 +9,7 @@ class Station:
     station_id: str
     nickname: str
 
+
 @dataclass(frozen=True)
 class Stations:
     BATTERSEA_POWER_STATION: Station = Station("940GZZBPSUST", "battersea")
@@ -16,14 +17,15 @@ class Stations:
     KENNINGTON: Station = Station("940GZZLUKNG", "kennington")
     MORDEN: Station = Station("940GZZLUMDN", "morden")
 
-ID_TO_STATION= {
-    v.station_id: v for k, v in Stations.__dict__.items()
-    if isinstance(v, Station)
+
+ID_TO_STATION = {
+    v.station_id: v for k, v in Stations.__dict__.items() if isinstance(v, Station)
 }
+
 
 class TFL:
     def __init__(
-        self, 
+        self,
         font_path: str = "assets/johnston.ttf",
         font_size: int = 8,
         text_color: tuple[int, int, int] = (255, 211, 0),
@@ -77,7 +79,7 @@ class TFL:
             text=text,
             fill=self.text_color,
             font=self.font,
-            anchor="la"
+            anchor="la",
         )
 
     def get_countdown(self, station: Station):
@@ -85,7 +87,7 @@ class TFL:
         draw = ImageDraw.Draw(image)
 
         self._draw_header(image, draw, station.nickname.capitalize())
-        
+
         arrivals = self._get_arrivals(station.station_id)
 
         # height of the header
@@ -134,8 +136,7 @@ class TFL:
 
         return image
 
+
 if __name__ == "__main__":
     tfl = TFL()
     tfl.get_countdown(Stations.BELSIZE_PARK)
-
-

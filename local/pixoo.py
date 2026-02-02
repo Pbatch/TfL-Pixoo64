@@ -11,13 +11,15 @@ class Pixoo:
     def encode_image(image: Image):
         size = (image.width, image.height)
         if size != (64, 64):
-            raise ValueError(f"Pixoo images must be 64x64, but the image size was {size}")
+            raise ValueError(
+                f"Pixoo images must be 64x64, but the image size was {size}"
+            )
 
         pixels = []
         for red, green, blue in image.getdata():
             pixels.extend([red, green, blue])
 
-        return base64.b64encode(bytearray(pixels)).decode('utf-8')
+        return base64.b64encode(bytearray(pixels)).decode("utf-8")
 
     @staticmethod
     def post(payload):
@@ -27,14 +29,13 @@ class Pixoo:
             response.raise_for_status()
 
             return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    "status": "Success",
-                    "pixoo_response": response.json()
-                })
+                "statusCode": 200,
+                "body": json.dumps(
+                    {"status": "Success", "pixoo_response": response.json()}
+                ),
             }
         except requests.exceptions.RequestException as e:
             return {
-                'statusCode': 500,
-                'body': json.dumps({"status": "Error", "reason": str(e)})
+                "statusCode": 500,
+                "body": json.dumps({"status": "Error", "reason": str(e)}),
             }

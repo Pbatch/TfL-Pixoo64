@@ -16,17 +16,19 @@ def lambda_handler(event, context):
         "PicOffset": 0,
         "PicID": int(time.time()),
         "PicSpeed": 0,
-        "PicData": pixoo.encode_image(countdown)
+        "PicData": pixoo.encode_image(countdown),
     }
     result = pixoo.post(payload)
 
     return result
+
 
 def main():
     event = None
     context = None
     result = lambda_handler(event, context)
     print(result)
+
 
 if __name__ == "__main__":
     main()
