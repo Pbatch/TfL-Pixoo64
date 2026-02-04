@@ -3,10 +3,10 @@ import time
 from pixoo import Pixoo
 from tfl import TFL, Stations
 
+pixoo = Pixoo()
+tfl = TFL()
 
 def lambda_handler(event, context):
-    pixoo = Pixoo()
-    tfl = TFL()
     countdown = tfl.get_countdown(Stations.BELSIZE_PARK)
 
     payload = {

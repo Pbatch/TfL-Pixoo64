@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
-
+import os
 
 @dataclass(frozen=True)
 class Station:
@@ -38,19 +38,20 @@ class TFL:
         self.text_color = text_color
         self.background_color = background_color
 
+        self.session = requests.Session()
         self.font = ImageFont.truetype(self.font_path, self.font_size)
         self.no_arrivals_font = ImageFont.truetype(self.font_path, 9)
-
         self.roundel = Image.open("assets/roundel.png")
         self.bank = Image.open("assets/bank.png")
         self.cross = Image.open("assets/cross.png")
         self.tube = Image.open("assets/tube.png")
+        self.app_key = os.environ["TFL_APP_KEY"]
 
-    @staticmethod
-    def _get_arrivals(station_id):
+    def _get_arrivals(self, station_id):
         tfl_url = f"https://api.tfl.gov.uk/StopPoint/{station_id}/Arrivals"
+        params = {"APP_KEY": self.app_key}
         try:
-            response = requests.get(tfl_url, timeout=5)
+            response = self.session.get(tfl_url, params=params, timeout=5)
             arrivals = response.json()
         except Exception as e:
             print(e)

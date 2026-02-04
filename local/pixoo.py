@@ -7,6 +7,10 @@ from PIL import Image
 
 
 class Pixoo:
+    def __init__(self):
+        self.session = requests.session()
+        self.pixoo_url = os.environ["PIXOO_URL"]
+
     @staticmethod
     def encode_image(image: Image):
         size = (image.width, image.height)
@@ -21,11 +25,9 @@ class Pixoo:
 
         return base64.b64encode(bytearray(pixels)).decode("utf-8")
 
-    @staticmethod
-    def post(payload):
-        url = os.environ["PIXOO_URL"]
+    def post(self, payload):
         try:
-            response = requests.post(url, json=payload, timeout=5.0)
+            response = self.session.post(self.pixoo_url, json=payload, timeout=5.0)
             response.raise_for_status()
 
             return {

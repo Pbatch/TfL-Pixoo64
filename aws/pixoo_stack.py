@@ -15,28 +15,22 @@ class PixooStack(Stack):
         pixoo_lambda = PythonFunction(
             self,
             "PixooHandler",
-            runtime=_lambda.Runtime.PYTHON_3_11,
+            runtime=_lambda.Runtime.PYTHON_3_14,
             entry="../local",
             index="index.py",
             handler="lambda_handler",
             timeout=Duration.seconds(10),
             environment={
                 "PIXOO_URL": os.environ["PIXOO_URL"],
+                "TFL_APP_KEY": os.environ["TFL_APP_KEY"],
             },
         )
 
-        rule = events.Rule(
+        pixoo_rule = events.Rule(
             self,
-            "EveryMinuteRule",
+            "PixooRule",
             schedule=events.Schedule.rate(Duration.minutes(1)),
         )
+        pixoo_rule.add_target(targets.LambdaFunction(pixoo_lambda))
 
-        # 3. Add the Lambda as a target for the rule
-        rule.add_target(targets.LambdaFunction(pixoo_lambda))
-
-        fn_url = pixoo_lambda.add_function_url(
-            auth_type=_lambda.FunctionUrlAuthType.NONE
-        )
-
-        CfnOutput(self, "PixooUrl", value=fn_url.url)
-        CfnOutput(self, "DeploymentRegion", value=self.region)
+        CfnOutput(self, "PixooRegion", value=self.region)
