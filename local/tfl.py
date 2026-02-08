@@ -1,7 +1,9 @@
+import json
 import os
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
-import requests
+import urllib3
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -62,7 +64,7 @@ class TFL:
         self.bank_text_color = bank_text_color
         self.background_color = background_color
 
-        self.session = requests.Session()
+        self.pool_manager = urllib3.PoolManager()
         self.font = ImageFont.truetype(self.font_path, self.font_size)
         self.no_arrivals_font = ImageFont.truetype(self.font_path, 9)
         self.underground = Image.open("assets/underground.png")
@@ -70,7 +72,25 @@ class TFL:
         self.bank = Image.open("assets/bank.png")
         self.cross = Image.open("assets/cross.png")
         self.tube = Image.open("assets/tube.png")
+        self.api_fields = "lineName,destinationName,timeToStation,directionName"
         self.app_key = os.environ["TFL_APP_KEY"]
+
+    @staticmethod
+    def _filter_arrivals(arrivals, station_id, inbound):
+        filtered_arrivals = []
+        direction = "inbound" if inbound else "outbound"
+        exceptions = DIRECTION_EXCEPTIONS[direction].get(station_id, set())
+        for a in arrivals:
+            if a["direction"] == direction:
+                filtered_arrivals.append(a)
+                continue
+
+            if a["direction"] == "" and a["destinationNaptanId"] in exceptions:
+                filtered_arrivals.append(a)
+
+        filtered_arrivals.sort(key=lambda x: x["timeToStation"])
+
+        return filtered_arrivals
 
     def _draw_header(self, image, draw, text, underground):
         text_width = draw.textlength(text, font=self.font)
@@ -98,32 +118,31 @@ class TFL:
             anchor="la",
         )
 
-    def get_arrivals(self, station_id: str, inbound: bool):
-        tfl_url = f"https://api.tfl.gov.uk/StopPoint/{station_id}/Arrivals"
-        params = {"APP_KEY": self.app_key}
+    def _get_arrivals(self, station_id):
+        url = f"https://api.tfl.gov.uk/StopPoint/{station_id}/Arrivals?APP_KEY={self.app_key}"
         try:
-            response = self.session.get(tfl_url, params=params, timeout=5)
-            all_arrivals = response.json()
+            response = self.pool_manager.request(
+                "GET",
+                url,
+                timeout=5.0
+            )
+
+            if response.status != 200:
+                print(f"TfL API Error: {response.status}")
+                return []
+
+            return json.loads(response.data.decode("utf-8"))
+
         except Exception as e:
-            print(e)
+            print(f"Request failed: {e}")
             return []
 
-        arrivals = []
-        direction = "inbound" if inbound else "outbound"
-        for a in all_arrivals:
-            if a["direction"] == direction:
-                arrivals.append(a)
-                continue
-
-            exceptions = DIRECTION_EXCEPTIONS[direction].get(station_id, set())
-            if a["direction"] == "" and a["destinationNaptanId"] in exceptions:
-                arrivals.append(a)
-
-        arrivals.sort(key=lambda x: x["timeToStation"])
-
+    def get_and_filter_arrivals(self, station_id: str, inbound: bool) -> list[dict]:
+        arrivals = self._get_arrivals(station_id)
+        arrivals = self._filter_arrivals(arrivals, station_id, inbound)
         return arrivals
 
-    def make_image(self, arrivals: list[dict], header_text: str, underground: bool):
+    def make_image(self, arrivals: list[dict], header_text: str, underground: bool) -> Image:
         image = Image.new("RGB", (64, 64), color=self.background_color)
         draw = ImageDraw.Draw(image)
 
@@ -172,7 +191,7 @@ class TFL:
 def main():
     tfl = TFL()
     station = Stations.BELSIZE_PARK
-    arrivals = tfl.get_arrivals(station.station_id, inbound=False)
+    arrivals = tfl.get_and_filter_arrivals(station.station_id, inbound=False)
     image = tfl.make_image(arrivals, station.nickname.capitalize(), underground=station.underground)
     image.save("debug.jpg")
 

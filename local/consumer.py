@@ -16,7 +16,7 @@ def lambda_handler(event, context):
     inbound = body["inbound"]
 
     countdown = tfl.make_image(
-        arrivals=tfl.get_arrivals(station.station_id, inbound),
+        arrivals=tfl.get_and_filter_arrivals(station.station_id, inbound),
         header_text=station.nickname.capitalize(),
         underground=station.underground
     )

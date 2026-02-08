@@ -2,13 +2,13 @@ import base64
 import json
 import os
 
-import requests
+import urllib3
 from PIL import Image
 
 
 class Pixoo:
     def __init__(self):
-        self.session = requests.session()
+        self.pool_manager = urllib3.PoolManager()
         self.pixoo_url = os.environ["PIXOO_URL"]
 
     @staticmethod
@@ -26,17 +26,35 @@ class Pixoo:
         return base64.b64encode(bytearray(pixels)).decode("utf-8")
 
     def post(self, payload):
+        encoded_payload = json.dumps(payload).encode("utf-8")
         try:
-            response = self.session.post(self.pixoo_url, json=payload, timeout=5.0)
-            response.raise_for_status()
+            response = self.pool_manager.request(
+                "POST",
+                self.pixoo_url,
+                body=encoded_payload,
+                headers={"Content-Type": "application/json"},
+                timeout=5.0
+            )
+
+            if response.status >= 400:
+                return {
+                    "statusCode": response.status,
+                    "body": json.dumps({
+                        "status": "Error",
+                        "reason": f"Pixoo returned status code {response.status}"
+                    }),
+                }
 
             return {
                 "statusCode": 200,
                 "body": json.dumps(
-                    {"status": "Success", "pixoo_response": response.json()}
+                    {
+                        "status": "Success",
+                        "pixoo_response": json.loads(response.data.decode("utf-8"))
+                    }
                 ),
             }
-        except requests.exceptions.RequestException as e:
+        except urllib3.exceptions.HTTPError as e:
             return {
                 "statusCode": 500,
                 "body": json.dumps({"status": "Error", "reason": str(e)}),
