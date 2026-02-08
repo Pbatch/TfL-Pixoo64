@@ -3,31 +3,34 @@ import time
 from pixoo import Pixoo
 from tfl import TFL, Stations
 
-pixoo = Pixoo()
-tfl = TFL()
-
-def lambda_handler(event, context):
-    countdown = tfl.get_countdown(Stations.BELSIZE_PARK)
-
-    payload = {
-        "Command": "Draw/SendHttpGif",
-        "PicNum": 1,
-        "PicWidth": 64,
-        "PicOffset": 0,
-        "PicID": int(time.time()),
-        "PicSpeed": 0,
-        "PicData": pixoo.encode_image(countdown),
-    }
-    result = pixoo.post(payload)
-
-    return result
-
 
 def main():
-    event = None
-    context = None
-    result = lambda_handler(event, context)
-    print(result)
+    pixoo = Pixoo()
+    tfl = TFL()
+    belsize_park = Stations.BELSIZE_PARK
+
+    while True:
+        arrivals = [
+            arrival
+            for arrival in tfl.get_arrivals(belsize_park.station_id)
+            if "Northbound" not in arrival["platformName"]
+        ]
+        header_text = belsize_park.nickname.capitalize()
+        image = tfl.make_image(arrivals, header_text)
+
+        payload = {
+            "Command": "Draw/SendHttpGif",
+            "PicNum": 0,
+            "PicWidth": 64,
+            "PicOffset": 0,
+            "PicID": int(time.time()),
+            "PicSpeed": 0,
+            "PicData": pixoo.encode_image(image),
+        }
+        result = pixoo.post(payload)
+        print(result)
+
+        time.sleep(10)
 
 
 if __name__ == "__main__":

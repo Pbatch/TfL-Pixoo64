@@ -1,8 +1,9 @@
+import os
 from dataclasses import dataclass
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
-import os
+
 
 @dataclass(frozen=True)
 class Station:
@@ -47,20 +48,6 @@ class TFL:
         self.tube = Image.open("assets/tube.png")
         self.app_key = os.environ["TFL_APP_KEY"]
 
-    def _get_arrivals(self, station_id):
-        tfl_url = f"https://api.tfl.gov.uk/StopPoint/{station_id}/Arrivals"
-        params = {"APP_KEY": self.app_key}
-        try:
-            response = self.session.get(tfl_url, params=params, timeout=5)
-            arrivals = response.json()
-        except Exception as e:
-            print(e)
-            return []
-
-        arrivals.sort(key=lambda x: x["timeToStation"])
-
-        return arrivals
-
     def _draw_header(self, image, draw, text):
         text_width = draw.textlength(text, font=self.font)
 
@@ -86,13 +73,25 @@ class TFL:
             anchor="la",
         )
 
-    def get_countdown(self, station: Station):
+    def get_arrivals(self, station_id):
+        tfl_url = f"https://api.tfl.gov.uk/StopPoint/{station_id}/Arrivals"
+        params = {"APP_KEY": self.app_key}
+        try:
+            response = self.session.get(tfl_url, params=params, timeout=5)
+            arrivals = response.json()
+        except Exception as e:
+            print(e)
+            return []
+
+        arrivals.sort(key=lambda x: x["timeToStation"])
+
+        return arrivals
+
+    def make_image(self, arrivals, header_text):
         image = Image.new("RGB", (64, 64), color=self.background_color)
         draw = ImageDraw.Draw(image)
 
-        self._draw_header(image, draw, station.nickname.capitalize())
-
-        arrivals = self._get_arrivals(station.station_id)
+        self._draw_header(image, draw, header_text)
 
         # height of the header
         y = self.font_size
@@ -141,6 +140,12 @@ class TFL:
         return image
 
 
-if __name__ == "__main__":
+def main():
     tfl = TFL()
-    tfl.get_countdown(Stations.BELSIZE_PARK)
+    belsize_park = Stations.BELSIZE_PARK
+    arrivals = tfl.get_arrivals(belsize_park.station_id)
+    tfl.make_image(arrivals, belsize_park.nickname.capitalize())
+
+
+if __name__ == "__main__":
+    main()
