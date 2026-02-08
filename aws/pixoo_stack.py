@@ -1,9 +1,12 @@
 import os
 
-from aws_cdk import CfnOutput, Stack
-from aws_cdk import aws_ec2 as ec2
-from aws_cdk import aws_iam as iam
-from aws_cdk.aws_ecr_assets import DockerImageAsset, Platform
+from aws_cdk import CfnOutput, Duration, Stack
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
+from aws_cdk import aws_lambda as _lambda
+from aws_cdk import aws_lambda_event_sources as lambda_sources
+from aws_cdk import aws_sqs as sqs
+from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from constructs import Construct
 
 
@@ -11,56 +14,50 @@ class PixooStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        vpc = ec2.Vpc(
+        pixoo_queue = sqs.Queue(
+            self, "PixooQueue", visibility_timeout=Duration.seconds(60),
+        )
+
+        lambda_props = {
+            "runtime": _lambda.Runtime.PYTHON_3_14,
+            "entry": "../local",
+            "timeout": Duration.seconds(10),
+            "handler": "lambda_handler",
+        }
+
+        # Lambda that is triggered by Cloudwatch
+        producer_lambda = PythonFunction(
             self,
-            "PixooVpc",
-            max_azs=2,
-            nat_gateways=0,
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="Public",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                )
-            ],
+            "Producer",
+            index="producer.py",
+            environment={
+                "QUEUE_URL": pixoo_queue.queue_url,
+            },
+            **lambda_props,
         )
+        pixoo_queue.grant_send_messages(producer_lambda)
 
-        instance = ec2.Instance(
+        # Lambda that is triggered by SQS
+        consumer_lambda = PythonFunction(
             self,
-            "PixooServer",
-            instance_type=ec2.InstanceType("t4g.nano"),
-            machine_image=ec2.MachineImage.latest_amazon_linux2023(
-                cpu_type=ec2.AmazonLinuxCpuType.ARM_64
-            ),
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
-            role=iam.Role(
-                self,
-                "PixooRole",
-                assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-                managed_policies=[
-                    iam.ManagedPolicy.from_aws_managed_policy_name(
-                        "AmazonSSMManagedInstanceCore"
-                    )
-                ],
-            ),
+            "Consumer",
+            index="consumer.py",
+            environment={
+                "PIXOO_URL": os.environ["PIXOO_URL"],
+                "TFL_APP_KEY": os.environ["TFL_APP_KEY"],
+            },
+            **lambda_props,
         )
+        event_source = lambda_sources.SqsEventSource(pixoo_queue, batch_size=1)
+        consumer_lambda.add_event_source(event_source)
 
-        image_asset = DockerImageAsset(
-            self, "PixooImage", directory="../local", platform=Platform.LINUX_ARM64
+        # Trigger the producer lambda once per minute
+        pixoo_rule = events.Rule(
+            self,
+            "PixooRule",
+            schedule=events.Schedule.rate(Duration.minutes(1)),
         )
+        pixoo_rule.add_target(targets.LambdaFunction(producer_lambda))
 
-        image_asset.repository.grant_pull(instance.role)
-
-        instance.add_user_data(
-            "dnf update -y",
-            "dnf install -y docker",
-            "systemctl enable --now docker",
-            f"aws ecr get-login-password --region {self.region} | docker login --username AWS --password-stdin {image_asset.repository.repository_uri}",
-            f"docker pull {image_asset.image_uri}",
-            f"docker run -d --name pixoo-app --restart always "
-            f"-e PIXOO_URL={os.environ.get('PIXOO_URL')} "
-            f"-e TFL_APP_KEY={os.environ.get('TFL_APP_KEY')} "
-            f"{image_asset.image_uri}",
-        )
-
-        CfnOutput(self, "InstanceId", value=instance.instance_id)
+        CfnOutput(self, "PixooRegion", value=self.region)
+        CfnOutput(self, "PixooQueueURL", value=pixoo_queue.queue_url)
