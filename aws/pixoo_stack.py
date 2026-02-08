@@ -46,7 +46,6 @@ class PixooStack(Stack):
                 "PIXOO_URL": os.environ["PIXOO_URL"],
                 "TFL_APP_KEY": os.environ["TFL_APP_KEY"],
             },
-            memory_size=256,
             **lambda_props,
         )
         event_source = lambda_sources.SqsEventSource(pixoo_queue, batch_size=1)

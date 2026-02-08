@@ -72,7 +72,6 @@ class TFL:
         self.bank = Image.open("assets/bank.png")
         self.cross = Image.open("assets/cross.png")
         self.tube = Image.open("assets/tube.png")
-        self.api_fields = "lineName,destinationName,timeToStation,directionName"
         self.app_key = os.environ["TFL_APP_KEY"]
 
     @staticmethod
