@@ -1,4 +1,4 @@
-# Pixoo64 TFL Departures Board
+# Transport for London - Pixoo 64
 
 A Real-Time TfL Departures Board for Pixoo64
 
