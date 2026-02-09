@@ -1,5 +1,4 @@
 .venv
 .idea/
-debug.py
 aws/cdk.out
 **/__pycache__
