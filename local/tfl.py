@@ -193,7 +193,7 @@ def main():
     station = Stations.HAMPSTEAD_HEATH
     arrivals = tfl.get_and_filter_arrivals(station.station_id, inbound=False)
     image = tfl.make_image(arrivals, station.nickname.capitalize(), underground=station.underground)
-    image.save("debug.jpg")
+    image.save("debug.png")
 
 
 if __name__ == "__main__":
