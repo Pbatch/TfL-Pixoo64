@@ -33,16 +33,18 @@ class Pixoo:
                 self.pixoo_url,
                 body=encoded_payload,
                 headers={"Content-Type": "application/json"},
-                timeout=5.0
+                timeout=5.0,
             )
 
             if response.status >= 400:
                 return {
                     "statusCode": response.status,
-                    "body": json.dumps({
-                        "status": "Error",
-                        "reason": f"Pixoo returned status code {response.status}"
-                    }),
+                    "body": json.dumps(
+                        {
+                            "status": "Error",
+                            "reason": f"Pixoo returned status code {response.status}",
+                        }
+                    ),
                 }
 
             return {
@@ -50,7 +52,7 @@ class Pixoo:
                 "body": json.dumps(
                     {
                         "status": "Success",
-                        "pixoo_response": json.loads(response.data.decode("utf-8"))
+                        "pixoo_response": json.loads(response.data.decode("utf-8")),
                     }
                 ),
             }
