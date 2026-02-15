@@ -1,9 +1,8 @@
 import json
 import time
 
-from tfl import ID_TO_STATION
 from pixoo import Pixoo
-from tfl import TFL, Stations
+from tfl import ID_TO_STATION, TFL, Stations
 
 pixoo = Pixoo()
 tfl = TFL()
@@ -18,7 +17,7 @@ def lambda_handler(event, context):
     countdown = tfl.make_image(
         arrivals=tfl.get_and_filter_arrivals(station.station_id, inbound),
         header_text=station.nickname.capitalize(),
-        underground=station.underground
+        underground=station.underground,
     )
 
     payload = {

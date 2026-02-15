@@ -1,9 +1,19 @@
 import json
 import os
+import string
 from dataclasses import dataclass
 
 import urllib3
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+
+
+@dataclass(frozen=True)
+class Colours:
+    RED = (220, 36, 31)
+    WHITE = (255, 255, 255)
+    BLUE = (0, 25, 168)
+    YELLOW = (255, 211, 0)
+    GRAY = (20, 20, 20)
 
 
 @dataclass(frozen=True)
@@ -13,21 +23,26 @@ class Station:
     code: str
     underground: bool
 
+    def __post_init__(self):
+        if len(self.nickname) > 10:
+            raise ValueError(f'Nickname "{self.nickname}" is too long (max 10 chars)')
+
 
 @dataclass(frozen=True)
 class Stations:
-    BATTERSEA_POWER_STATION: Station = Station("940GZZBPSUST", "btsea", "BPS", True)
+    BATTERSEA_POWER_STATION: Station = Station("940GZZBPSUST", "battersea", "BPS", True)
     BELSIZE_PARK: Station = Station("940GZZLUBZP", "belsize", "BZP", True)
     GOLDERS_GREEN: Station = Station("940GZZLUGGN", "golders", "GGN", True)
-    EDGWARE: Station = Station("940GZZLUEGW", "edgwre", "EDG", True)
-    KENNINGTON: Station = Station("940GZZLUKNG", "kngtn", "KEN", True)
-    MORDEN: Station = Station("940GZZLUMDN", "mrden", "MDN", True)
+    EDGWARE: Station = Station("940GZZLUEGW", "edgware", "EDG", True)
+    KENNINGTON: Station = Station("940GZZLUKNG", "kennington", "KEN", True)
+    MORDEN: Station = Station("940GZZLUMDN", "morden", "MDN", True)
     EUSTON: Station = Station("940GZZLUEUS", "euston", "EUS", True)
     HAMPSTEAD_HEATH: Station = Station("910GHMPSTDH", "heath", "HDH", False)
-    STRATFORD: Station = Station("910GSTFD", "strtfrd", "SRA", False)
-    CLAPHAM_JUNCTION: Station = Station("910GCLPHMJ1", "claphm", "CLJ", False)
-    RICHMOND: Station = Station("910GRICHMND", "rchmnd", "RMD", False)
-    WILLESDEN_JUNCTION: Station = Station("910GWLSDJHL", "wllsdn", "WIJ", False)
+    STRATFORD: Station = Station("910GSTFD", "stratford", "SRA", False)
+    CLAPHAM_JUNCTION: Station = Station("910GCLPHMJ1", "clapham", "CLJ", False)
+    RICHMOND: Station = Station("910GRICHMND", "richmond", "RMD", False)
+    WILLESDEN_JUNCTION: Station = Station("910GWLSDJHL", "willesden", "WIJ", False)
+
 
 DUPLICATE_IDS = {"910GCLPHMJC": "910GCLPHMJ1"}
 ID_TO_STATION = {
@@ -49,29 +64,23 @@ DIRECTION_EXCEPTIONS = {
 
 
 class TFL:
-    def __init__(
-        self,
-        font_path: str = "assets/johnston.ttf",
-        font_size: int = 10,
-        text_color: tuple[int, int, int] = (255, 211, 0),
-        bank_text_color: tuple[int, int, int] = (133, 187, 101),
-        background_color: tuple[int, int, int] = (20, 20, 20),
-    ):
-        self.font_path = font_path
-        self.font_size = font_size
-        self.text_color = text_color
-        self.bank_text_color = bank_text_color
-        self.background_color = background_color
-
+    def __init__(self):
         self.pool_manager = urllib3.PoolManager()
-        self.font = ImageFont.truetype(self.font_path, self.font_size)
-        self.no_arrivals_font = ImageFont.truetype(self.font_path, 9)
+        self.app_key = os.environ["TFL_APP_KEY"]
+
         self.underground = Image.open("assets/underground.png")
         self.overground = Image.open("assets/overground.png")
         self.bank = Image.open("assets/bank.png")
         self.cross = Image.open("assets/cross.png")
         self.tube = Image.open("assets/tube.png")
-        self.app_key = os.environ["TFL_APP_KEY"]
+
+        self.glyphs = {letter: Image.open(f"assets/letters/{letter}.png") for letter in string.ascii_uppercase}
+        self.glyphs.update({str(number): Image.open(f"assets/numbers/{number}.png") for number in range(10)})
+        self.letter_height = self.glyphs["A"].height
+        self.number_height = self.glyphs["0"].height
+
+    def _text_width(self, text):
+        return sum(self.glyphs[char].width for char in text.upper()) + len(text) - 1
 
     @staticmethod
     def _filter_arrivals(arrivals, station_id, inbound):
@@ -80,7 +89,9 @@ class TFL:
         exceptions = DIRECTION_EXCEPTIONS[direction].get(station_id, set())
         for a in arrivals:
             a["naptanId"] = DUPLICATE_IDS.get(a["naptanId"], a["naptanId"])
-            a["destinationNaptanId"] = DUPLICATE_IDS.get(a["destinationNaptanId"], a["destinationNaptanId"])
+            a["destinationNaptanId"] = DUPLICATE_IDS.get(
+                a["destinationNaptanId"], a["destinationNaptanId"]
+            )
             if a["direction"] == direction:
                 filtered_arrivals.append(a)
                 continue
@@ -92,40 +103,37 @@ class TFL:
 
         return filtered_arrivals
 
-    def _draw_header(self, image, draw, text, underground):
-        text_width = draw.textlength(text, font=self.font)
+    def _draw_header(self, image, text, underground):
         roundel = self.underground if underground else self.overground
 
+        text_width = self._text_width(text)
         x = int(32 - (text_width + roundel.width + 2) // 2)
-        image.paste(roundel, (x, 3), roundel)
-        draw.text(
-            xy=(x + roundel.width + 2, 0),
+        image.paste(roundel, (x, 2), roundel)
+        self._draw_text(
+            image=image,
+            xy=(x + roundel.width + 2, 1),
             text=text,
-            fill=self.text_color,
-            font=self.font,
-            anchor="la",
+            color=Colours.YELLOW,
         )
 
-    def _draw_no_arrivals(self, image, draw, y):
+    def _draw_no_arrivals(self, image, y):
         image.paste(self.tube, (32 - self.tube.width // 2, y + 10), self.tube)
-        text = "Service closed"
-        text_width = int(draw.textlength(text, font=self.no_arrivals_font))
-        draw.text(
-            xy=(32 - text_width // 2, y + 10 + self.tube.height),
-            text=text,
-            fill=self.text_color,
-            font=self.no_arrivals_font,
-            anchor="la",
-        )
+
+        y += 10 + self.tube.height
+        for text in ["Service", "Closed"]:
+            text_width = self._text_width(text,)
+            self._draw_text(
+                image=image,
+                xy=(32 - text_width // 2, y),
+                text=text,
+                color=Colours.YELLOW,
+            )
+            y += self.letter_height + 1
 
     def _get_arrivals(self, station_id):
         url = f"https://api.tfl.gov.uk/StopPoint/{station_id}/Arrivals?APP_KEY={self.app_key}"
         try:
-            response = self.pool_manager.request(
-                "GET",
-                url,
-                timeout=5.0
-            )
+            response = self.pool_manager.request("GET", url, timeout=5.0)
 
             if response.status != 200:
                 print(f"TfL API Error: {response.status}")
@@ -137,62 +145,79 @@ class TFL:
             print(f"Request failed: {e}")
             return []
 
+    def _draw_text(self, image, xy, text, color):
+        x, y = xy
+        for char in text.upper():
+            glyph = self.glyphs[char]
+            background = Image.new("RGBA", glyph.size, color=color)
+            image.paste(background, (x, y), glyph)
+
+            x += glyph.width + 1
+
     def get_and_filter_arrivals(self, station_id: str, inbound: bool) -> list[dict]:
         arrivals = self._get_arrivals(station_id)
         arrivals = self._filter_arrivals(arrivals, station_id, inbound)
         return arrivals
 
-    def make_image(self, arrivals: list[dict], header_text: str, underground: bool) -> Image:
-        image = Image.new("RGB", (64, 64), color=self.background_color)
-        draw = ImageDraw.Draw(image)
+    def make_image(
+        self, arrivals: list[dict], header_text: str, underground: bool
+    ) -> Image:
+        image = Image.new("RGB", (64, 64), color=Colours.GRAY)
 
-        self._draw_header(image, draw, header_text, underground)
+        self._draw_header(image, header_text, underground)
 
-        # height of the header
-        y = self.font_size
+        # height of the header + 3 spaces
+        y = self.letter_height + 3
         for arrival in arrivals:
-            fill = self.bank_text_color if "via Bank" in arrival["towards"] else self.text_color
-
             try:
                 nickname = ID_TO_STATION[arrival["destinationNaptanId"]].nickname
             except KeyError:
                 print(f"Arrival is not a listed station: {arrival}")
                 nickname = arrival["destinationName"].split()[0][:3]
             left_text = nickname.capitalize()
-
-            draw.text(
+            left_width = self._text_width(left_text)
+            self._draw_text(
+                image=image,
                 xy=(1, y),
                 text=left_text,
-                fill=fill,
-                font=self.font,
-                anchor="la",
+                color=Colours.YELLOW,
             )
 
-            mins_to_station = arrival["timeToStation"] // 60
-            right_text = "Due" if mins_to_station == 0 else f"{mins_to_station}m"
-            draw.text(
-                xy=(63, y),
-                text=right_text,
-                fill=fill,
-                font=self.font,
-                anchor="ra",
+            if "via CX" in arrival["towards"]:
+                image.paste(self.cross, (left_width + 2, y), self.cross)
+            elif "via Bank" in arrival["towards"]:
+                image.paste(self.bank, (left_width + 2, y), self.bank)
+
+
+            mins_to_station = str(arrival["timeToStation"] // 60)
+            text_width = self._text_width(mins_to_station)
+            self._draw_text(
+                image=image,
+                xy=(
+                    63 - text_width,
+                    y + self.letter_height - self.number_height,
+                ),
+                text=mins_to_station,
+                color=Colours.YELLOW,
             )
 
-            y += self.font_size
-            if y + self.font_size >= 64:
+            y += self.letter_height + 1
+            if y + self.letter_height >= 64:
                 break
 
-        if y == self.font_size:
-            self._draw_no_arrivals(image, draw, y)
+        if len(arrivals) == 0:
+            self._draw_no_arrivals(image, y)
 
         return image
 
 
 def main():
     tfl = TFL()
-    station = Stations.HAMPSTEAD_HEATH
-    arrivals = tfl.get_and_filter_arrivals(station.station_id, inbound=False)
-    image = tfl.make_image(arrivals, station.nickname.capitalize(), underground=station.underground)
+    station = Stations.BELSIZE_PARK
+    arrivals = tfl.get_and_filter_arrivals(station.station_id, inbound=True)
+    image = tfl.make_image(
+        arrivals, station.nickname.capitalize(), underground=station.underground
+    )
     image.save("debug.png")
 
 

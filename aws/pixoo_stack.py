@@ -15,7 +15,9 @@ class PixooStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         pixoo_queue = sqs.Queue(
-            self, "PixooQueue", visibility_timeout=Duration.seconds(60),
+            self,
+            "PixooQueue",
+            visibility_timeout=Duration.seconds(60),
         )
 
         lambda_props = {

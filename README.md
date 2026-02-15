@@ -29,7 +29,7 @@ but the responses are more reliable with one.
 
 1) Request an API key from the TFL website (https://api-portal.tfl.gov.uk/signup). 
 2) Export the key with `export TFL_APP_KEY=<TFL_APP_KEY>`
-3) Test that the key is working by running `python local/tfl.py`. 
+3) Test that the key is working by running `cd local && python tfl.py`. 
 
 ### Pixoo64 API
 The Pixoo64 has 2 APIs, 
